@@ -1,2 +1,2 @@
 # fuzzer-console-front
-A graphic interface to interact with 
+A console interface to interact with 
