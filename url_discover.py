@@ -14,9 +14,9 @@ from sys import exit as sysexit
 
 class UrlDiscover:
     def __init__(self):
-        init(autoreset=True)
+        console.banner("Url Discovery Module Setup")
 
-        print(Fore.CYAN + "Setup...\n")
+        init(autoreset=True)
 
         save = query_yes_no("Do you want to save results ?", default="no")
         self.fuzzer = Fuzzer(save=save)
@@ -26,11 +26,12 @@ class UrlDiscover:
         print("Select the dictionary to use")
 
         self.dictionary = self.get_dictionary()
+        if not self.dictionary:
+            self.log_error("Canceled. Aborting...")
+            sysexit(0)
 
         self.url = input("Write the url to use: ")
 
-        self.dictionary = ""
-        self.url = ""
         self.workers = WORKERS
         self.timeout = TIMEOUT
         self.tor = False
@@ -45,33 +46,36 @@ class UrlDiscover:
         Tk().withdraw()
         self.logger.linfo("Waiting for dictionary selection...")
         filename = askopenfilename()
-        if not filename:
-            print(Fore.LIGHTRED_EX + "Canceled. Aborting...")
-            sleep(1)
-            sysexit(0)
         return filename
+
+
+    def log_error(self, message):
+        """Log error and wait to clear screen"""
+        self.logger.lerr(message)
+        sleep(2)
 
 
     def settings(self):
         """Change settings"""
         while True:
             console.clear()
-            # Cannot use Tor and a proxy at the same time.
+            # Disable Proxy option if Tor is in use #
             if self.tor:
-                proxy_option = Fore.LIGHTBLACK_EX + "[4] Proxy" + Fore.RESET
+                proxy_option = Fore.LIGHTBLACK_EX + "Proxy" + Fore.RESET
             else:
-                proxy_option = f"[4] Proxy --> {self.proxy}"
-            
+                proxy_option = f"Proxy --> {self.proxy}"
+
             if self.end == END_DEFAULT:
                 end_option = Fore.CYAN + "LAST WORD" + Fore.RESET
             else:
                 end_option = self.end
 
+            # Display options #
             print(f"""
             [1] Workers --> {self.workers}
             [2] Timeout --> {self.timeout}
             [3] Tor --> {self.tor}
-            {proxy_option}
+            [4] {proxy_option}
             [5] Start word --> {self.start}
             [6] End word --> {end_option}
             [7] Intervals --> {self.interval}
@@ -80,57 +84,117 @@ class UrlDiscover:
             """)
             option = input("--> ")
 
-            # If the option is an int:
-            if not option in ("3", "4"):
-                new_value = int(input("New value: "))
-                if (new_value < 1 and option != "5") or new_value < 0:
-                    self.logger.lerr("Invalid value given")
-                    continue
+            # Validate and set #
 
-                if option == "1":
-                    self.workers = new_value
-
-                elif option == "2":
-                    self.timeout = new_value
-
-                elif option == "5":
-                    if new_value >= self.end:
-                        self.logger.lerr("Start must be smaller than end")
-                        continue
-                    self.start = new_value
-
-                elif option == "6":
-                    if new_value <= self.start:
-                        self.logger.lerr("End must be grater than start")
-                        continue
-                    self.end = new_value
-
-                elif option == "7":
-                    self.interval = new_value
-
-            elif option == "3":
+            # Tor
+            if option == "3":
                 self.tor = not self.tor
 
+            # Proxy
             elif option == "4":
                 if self.tor:
-                    print(Fore.RED + "Disable Tor to use a custom proxy!")
+                    self.log_error("Disable Tor to use a custom proxy!")
                     continue
+                print("Leave blank to disable proxy.")
                 self.proxy = input("Proxy to use: ")
+                if self.proxy == "":
+                    self.proxy = None
 
+            # Workers
+            elif option == "1":
+                new_value = int(input("Number of workers = "))
+                if new_value < 1:
+                    self.log_error("Must be grater than 1.")
+                    continue
+                self.workers = new_value
+
+            # Timeout
+            elif option == "2":
+                new_value = int(input("Timeout in seconds = "))
+                if new_value < 1:
+                    self.log_error("Must be grater than 1.")
+                    continue
+                self.timeout = new_value
+
+            # Start word
+            elif option == "5":
+                new_value = int(input("First word index = "))
+                if new_value >= self.end and self.end != END_DEFAULT:
+                    self.log_error("Start must be smaller than end")
+                    continue
+                if new_value < 0:
+                    self.log_error("Must be a positive number.")
+                    continue
+                self.start = new_value
+
+            # End word
+            elif option == "6":
+                print(f"Set this to {END_DEFAULT} to use the last word of the dictionary")
+                new_value = int(input("Last word index = "))
+                if new_value != END_DEFAULT and new_value <= self.start:
+                    self.log_error("End must be grater than start")
+                    continue
+                self.end = new_value
+
+            # Intervals
+            elif option == "7":
+                new_value = int(input("Requests per interval = "))
+                if new_value < 0:
+                    self.log_error("Must be a positive number.")
+                    continue
+                self.interval = new_value
+
+            # Exit
             elif option == "99":
                 break
 
             else:
-                self.logger.lerr("Try again.")
-                sleep(2)
+                self.log_error("Try again.")
+
+
+    def run(self):
+        """Start execution"""
+        self.fuzzer.timeout = self.timeout
+        self.fuzzer.workers = self.workers
+        self.fuzzer.tor = self.tor
+        self.fuzzer.proxy = self.proxy
+        self.fuzzer.set_target(self.dictionary, self.url, self.start, self.end)
+        self.fuzzer.build_urls(ask=True)
+        self.fuzzer.run(self.interval)
+        self.fuzzer.print_stats()
+
+        console.cont()
 
 
     def main(self):
         while True:
             console.banner("Url Discovery Module")
-            # TODO: Print options.
-            try:
-                self.settings()
-            except ValueError:
-                self.logger.lerr("Value error!")
-                sleep(1)
+
+            print(f"""
+            [1] Run fuzzer
+            [2] Change settings
+            [3] Url: {self.url}
+            [4] Dictionary: {self.dictionary}
+            [99] Return
+            """)
+            option = input("--> ")
+            if option == "1":
+                self.run()
+
+            elif option == "2":
+                try:
+                    self.settings()
+                except ValueError:
+                    self.logger.lerr("Value error!")
+                    sleep(1)
+
+            elif option == "3":
+                self.url = input("New url: ")
+
+            elif option == "4":
+                filename = self.get_dictionary()
+                if filename:
+                    self.dictionary = filename
+
+            elif option == "99":
+                break

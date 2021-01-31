@@ -45,4 +45,4 @@ while True:
         print("Invalid option. Try again")
         sleep(2)
         continue
-    input("Press Enter to continue...")
+    console.cont()

@@ -29,3 +29,7 @@ def banner(subtitle):
                                     
     """)
     print(Fore.LIGHTGREEN_EX + subtitle)
+
+
+def cont():
+    input("Press enter to continue...")

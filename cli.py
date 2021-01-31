@@ -26,6 +26,7 @@ def main():
         if option == "1":
             fuzzer = UrlDiscover()
             fuzzer.main()
+            del fuzzer
         elif option == "2":
             raise NotImplementedError
         elif option == "99":
